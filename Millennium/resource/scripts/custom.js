@@ -1,68 +1,13 @@
 (function () {
-  const SELECTORS = [
-    'a', 'button', '[role="button"]', '.menuitem', '.MenuItem', '.tab', '.Tab', '.navigation', '.NavItem'
-  ];
+  'use strict';
 
   const TAB_CONFIG = [
-    {
-      key: 'store',
-      label: 'Магазин',
-      aliases: ['store', 'shop', 'магазин', 'market'],
-      fallback: 'steam://open/store'
-    },
-    {
-      key: 'library',
-      label: 'Библиотека',
-      aliases: ['library', 'библиотека'],
-      fallback: 'steam://open/library'
-    },
-    {
-      key: 'community',
-      label: 'Сообщество',
-      aliases: ['community', 'сообщество', 'forums'],
-      fallback: 'steam://open/community'
-    },
-    {
-      key: 'profile',
-      label: 'Профиль',
-      aliases: ['profile', 'профиль', 'account'],
-      fallback: 'steam://open/main'
-    },
-    {
-      key: 'friends',
-      label: 'Друзья',
-      aliases: ['friends', 'friends & chat', 'друзья', 'chat'],
-      fallback: 'steam://open/friends'
-    }
+    { key: 'store', label: '🛒 МАГАЗИН', url: 'steam://open/store' },
+    { key: 'library', label: '🎮 БИБЛИОТЕКА', url: 'steam://open/library' },
+    { key: 'community', label: '☁ СООБЩЕСТВО', url: 'steam://open/community' },
+    { key: 'profile', label: '👤 ПРОФИЛЬ', url: 'steam://open/main' },
+    { key: 'friends', label: '💬 ДРУЗЬЯ', url: 'steam://open/friends' }
   ];
-
-  function normalizeText(value) {
-    return String(value || '')
-      .toLowerCase()
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
-
-  function textMatches(node, aliases) {
-    if (!node) return false;
-
-    const raw = node.textContent || node.getAttribute('aria-label') || node.title || '';
-    const value = normalizeText(raw);
-
-    return aliases.some(alias => value.includes(alias.toLowerCase()));
-  }
-
-  function findSteamTabNode(tab) {
-    const els = document.querySelectorAll(SELECTORS.join(','));
-
-    for (const el of els) {
-      if (textMatches(el, tab.aliases)) {
-        return el;
-      }
-    }
-
-    return null;
-  }
 
   function setActiveTab(key) {
     const buttons = document.querySelectorAll('.toxic-neon-tab');
@@ -70,13 +15,51 @@
       const active = btn.dataset.tab === key;
       btn.classList.toggle('active', active);
       btn.setAttribute('aria-pressed', String(active));
+      btn.setAttribute('aria-selected', String(active));
     });
+  }
+
+  function clickNativeTab(tabKey) {
+    const candidates = document.querySelectorAll(
+      'a, button, [role="button"], [class*="NavItem"], [class*="tab"], [class*="supernav"], [class*="MenuItem"]'
+    );
+
+    for (const el of candidates) {
+      const text = (el.textContent || el.getAttribute('aria-label') || el.title || '').toLowerCase();
+      let match = false;
+
+      switch (tabKey) {
+        case 'store':
+          match = /магазин|store|shop/.test(text);
+          break;
+        case 'library':
+          match = /библиотека|library/.test(text);
+          break;
+        case 'community':
+          match = /сообщество|community|forums|соц/.test(text);
+          break;
+        case 'profile':
+          match = /профиль|profile|account|аккаунт/.test(text);
+          break;
+        case 'friends':
+          match = /друзья|friends|chat|чат/.test(text);
+          break;
+      }
+
+      if (match) {
+        el.click();
+        return true;
+      }
+    }
+
+    return false;
   }
 
   function triggerFallback(url) {
     try {
       const link = document.createElement('a');
       link.href = url;
+      link.style.display = 'none';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -85,23 +68,15 @@
     }
   }
 
-  function bindTab(tab, button) {
-    button.addEventListener('click', () => {
-      const target = findSteamTabNode(tab);
-      setActiveTab(tab.key);
-
-      if (target) {
-        target.click();
-        return;
-      }
-
-      triggerFallback(tab.fallback);
-    });
+  function handleTabClick(tab) {
+    setActiveTab(tab.key);
+    if (!clickNativeTab(tab.key)) {
+      triggerFallback(tab.url);
+    }
   }
 
   function buildTabBar() {
-    const existing = document.getElementById('toxic-neon-tabs');
-    if (existing) return;
+    if (document.getElementById('toxic-neon-tabs')) return;
 
     const bar = document.createElement('div');
     bar.id = 'toxic-neon-tabs';
@@ -114,8 +89,8 @@
       button.className = 'toxic-neon-tab';
       button.dataset.tab = tab.key;
       button.setAttribute('role', 'tab');
-      button.innerHTML = `<span>${tab.label}</span>`;
-      bindTab(tab, button);
+      button.textContent = tab.label;
+      button.addEventListener('click', () => handleTabClick(tab));
       bar.appendChild(button);
     });
 
@@ -123,26 +98,24 @@
     setActiveTab('library');
   }
 
-  function watchDom() {
+  function init() {
     buildTabBar();
 
     const observer = new MutationObserver(() => {
-      const hasSteamUI = document.body && document.body.innerText.length > 0;
-      if (hasSteamUI) {
+      if (!document.getElementById('toxic-neon-tabs')) {
         buildTabBar();
       }
     });
 
-    observer.observe(document.body || document.documentElement, {
-      childList: true,
-      subtree: true
-    });
+    const root = document.body || document.documentElement;
+    if (root) {
+      observer.observe(root, { childList: true, subtree: true });
+    }
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', watchDom);
+    document.addEventListener('DOMContentLoaded', init);
   } else {
-    watchDom();
+    init();
   }
 })();
-
